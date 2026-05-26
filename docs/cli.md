@@ -12,6 +12,12 @@ Equivalent direct script:
 python convert.py --input <file-or-dir> --output <file-or-dir> [--format <fmt> ...]
 ```
 
+Equivalent module fallback, useful when the script directory is not on `PATH`:
+
+```bash
+python -m abet_converter --input <file-or-dir> --output <file-or-dir> [--format <fmt> ...]
+```
+
 ## Arguments
 
 - `--input`: source `.ABETdb`, `.mdb`, or directory
@@ -19,6 +25,20 @@ python convert.py --input <file-or-dir> --output <file-or-dir> [--format <fmt> .
 - `--format`: repeatable; allowed values are `sqlite`, `sql`, `csv`, `xlsx`
 - `--recursive`: search subfolders when `--input` is a directory
 - `--mdbtools-dir`: override the bundled runtime directory
+
+## Installation Support Commands
+
+These commands work even when `abet-converter` is not on `PATH`:
+
+```bash
+python -m abet_converter doctor
+python -m abet_converter path --show
+python -m abet_converter path --add
+```
+
+- `doctor`: show Python, package version, script directory, PATH status, and repair command
+- `path --show`: show the script directory and whether it is on `PATH`
+- `path --add`: add the script directory to the user PATH/profile, then open a new terminal
 
 ## Output Rules
 
