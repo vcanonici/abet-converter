@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use ABET CONVERTER in research, please cite the software and the GitHub repository."
 title: "ABET CONVERTER"
 type: software
-version: 0.3.4
-date-released: 2026-05-12
+version: 0.3.5
+date-released: 2026-05-26
 abstract: "Cross-platform CLI to convert ABET and MDB databases into SQLite, SQL, CSV, and XLSX."
 repository-code: "https://github.com/vcanonici/abet-converter"
 url: "https://github.com/vcanonici/abet-converter"

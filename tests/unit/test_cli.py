@@ -1,9 +1,12 @@
-﻿from pathlib import Path
+from pathlib import Path
+import os
+import subprocess
+import sys
 
 import pytest
 
 from abet_converter.components.ingest.abet_to_sqlite import normalize_formats
-from abet_converter.cli import _validate_output_path, build_parser
+from abet_converter.cli import _handle_support_command, _validate_output_path, build_parser
 
 
 def test_cli_exposes_abet_converter_interface() -> None:
@@ -61,3 +64,42 @@ def test_validate_output_path_rejects_file_output_for_multi_format_file_input(tm
 
 def test_normalize_formats_defaults_to_sqlite() -> None:
     assert normalize_formats(None) == ("sqlite",)
+
+
+def test_module_execution_delegates_to_cli_help() -> None:
+    env = os.environ.copy()
+    source_path = Path(__file__).resolve().parents[2] / "src"
+    env["PYTHONPATH"] = f"{source_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    completed = subprocess.run(
+        [sys.executable, "-m", "abet_converter", "--help"],
+        check=True,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert "ABET CONVERTER" in completed.stdout
+    assert "--input" in completed.stdout
+
+
+def test_support_command_doctor_prints_installation_status(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    monkeypatch.setattr("abet_converter.path_support.get_script_dir", lambda: tmp_path)
+    monkeypatch.setenv("PATH", "")
+
+    assert _handle_support_command(["doctor"]) == 0
+
+    output = capsys.readouterr().out
+    assert "ABET Converter installation check" in output
+    assert "Script directory on PATH: no" in output
+    assert "python" in output.lower()
+
+
+def test_support_command_path_show_prints_script_directory(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    monkeypatch.setattr("abet_converter.path_support.get_script_dir", lambda: tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    assert _handle_support_command(["path", "--show"]) == 0
+
+    output = capsys.readouterr().out
+    assert f"Script directory: {tmp_path}" in output
+    assert "Script directory on PATH: yes" in output

@@ -73,6 +73,26 @@ abet-converter --help
 
 If you see help text, the installation worked.
 
+If your terminal says `abet-converter` is not recognized or not found, the Python script directory is probably not on your `PATH`. Run:
+
+```bash
+python -m abet_converter doctor
+```
+
+To add the script directory to your user `PATH`, run:
+
+```bash
+python -m abet_converter path --add
+```
+
+Then open a new terminal and check again:
+
+```bash
+abet-converter --help
+```
+
+This explicit repair step is needed because Python wheels installed from PyPI cannot safely edit your system `PATH` during `pip install`.
+
 ## Convert One File
 
 This example converts one ABET database into one SQLite file:
@@ -224,7 +244,7 @@ If you use ABET CONVERTER in research, please cite the repository.
   author = {Canonici, Vinicius Garcia and Pinto, Carlos},
   title = {ABET CONVERTER},
   year = {2026},
-  version = {0.3.4},
+  version = {0.3.5},
   url = {https://github.com/vcanonici/abet-converter},
   note = {Cross-platform CLI to convert ABET and MDB databases into SQLite, SQL, CSV, and XLSX}
 }

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from abet_converter.components.ingest.abet_to_sqlite import (
@@ -10,16 +11,41 @@ from abet_converter.components.ingest.abet_to_sqlite import (
     normalize_formats,
 )
 from abet_converter.drivers.mdbtools import resolve_mdbtools_runtime
+from abet_converter.path_support import add_script_dir_to_user_path, format_doctor, format_path_show
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="ABET CONVERTER")
+    parser = argparse.ArgumentParser(prog="abet-converter", description="ABET CONVERTER")
     parser.add_argument("--input", required=True, type=Path, dest="input_path")
     parser.add_argument("--output", required=True, type=Path, dest="output_path")
     parser.add_argument("--format", dest="formats", action="append", choices=["sqlite", "sql", "csv", "xlsx"])
     parser.add_argument("--recursive", action="store_true")
     parser.add_argument("--mdbtools-dir", type=Path)
     return parser
+
+
+def _handle_support_command(argv: list[str]) -> int | None:
+    if not argv:
+        return None
+
+    command = argv[0]
+    if command == "doctor":
+        if len(argv) != 1:
+            raise ValueError("doctor does not accept extra arguments.")
+        print(format_doctor())
+        return 0
+
+    if command == "path":
+        if len(argv) == 2 and argv[1] == "--show":
+            print(format_path_show())
+            return 0
+        if len(argv) == 2 and argv[1] == "--add":
+            result = add_script_dir_to_user_path()
+            print(result.message)
+            return 0
+        raise ValueError("path requires either --show or --add.")
+
+    return None
 
 
 def _validate_output_path(input_path: Path, output_path: Path, formats: tuple[str, ...]) -> None:
@@ -40,8 +66,13 @@ def _validate_output_path(input_path: Path, output_path: Path, formats: tuple[st
 
 
 def main(argv: list[str] | None = None) -> int:
+    effective_argv = sys.argv[1:] if argv is None else argv
+    support_result = _handle_support_command(effective_argv)
+    if support_result is not None:
+        return support_result
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(effective_argv)
 
     input_path = args.input_path.resolve()
     output_path = args.output_path.resolve()
