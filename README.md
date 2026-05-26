@@ -1,6 +1,6 @@
 # ABET CONVERTER
 
-ABET CONVERTER is a small command-line tool that converts `.ABETdb` and `.mdb` database files into easier formats:
+ABET CONVERTER is a cross-platform command-line interface (CLI) tool for exporting data from Lafayette Instrument's ABET (**A**nimal **B**ehavior **E**nvironment **T**est) software — used to program and run behavioral experiments. Converts `.ABETdb` and `.mdb` database files into easier formats:
 
 - SQLite
 - SQL
