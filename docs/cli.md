@@ -37,8 +37,8 @@ python -m abet_converter path --add
 ```
 
 - `doctor`: show Python, package version, script directory, PATH status, and repair command
-- `path --show`: show the script directory and whether it is on `PATH`
-- `path --add`: add the script directory to the user PATH/profile, then open a new terminal
+- `path --show`: show the script directory and whether it is on the current terminal `PATH`; on Windows it also shows the saved user `PATH`
+- `path --add`: add the script directory to the user PATH/profile, then close old terminal windows and open a new one
 
 ## Output Rules
 

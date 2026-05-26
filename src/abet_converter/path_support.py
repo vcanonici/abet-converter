@@ -24,6 +24,7 @@ class PathStatus:
     package_version: str
     script_dir: Path
     script_dir_in_path: bool
+    user_path_includes_script_dir: bool | None
     repair_command: str
 
 
@@ -48,13 +49,17 @@ def path_contains(directory: Path, path_value: str | None = None, *, path_separa
     return False
 
 
-def build_path_status(path_value: str | None = None) -> PathStatus:
+def build_path_status(path_value: str | None = None, winreg_module: Any | None = None) -> PathStatus:
     script_dir = get_script_dir()
+    user_path = get_windows_user_path(winreg_module) if sys.platform.startswith("win") else None
     return PathStatus(
         python_executable=Path(sys.executable).resolve(),
         package_version=__version__,
         script_dir=script_dir,
         script_dir_in_path=path_contains(script_dir, path_value),
+        user_path_includes_script_dir=(
+            path_contains(script_dir, user_path, path_separator=WINDOWS_PATH_SEPARATOR) if user_path is not None else None
+        ),
         repair_command=f"{sys.executable} -m abet_converter path --add",
     )
 
@@ -66,10 +71,17 @@ def format_doctor(status: PathStatus | None = None) -> str:
         f"Version: {current.package_version}",
         f"Python: {current.python_executable}",
         f"Script directory: {current.script_dir}",
-        f"Script directory on PATH: {'yes' if current.script_dir_in_path else 'no'}",
+        f"Script directory on current terminal PATH: {'yes' if current.script_dir_in_path else 'no'}",
     ]
+    if current.user_path_includes_script_dir is not None:
+        lines.append(f"Script directory on Windows user PATH: {'yes' if current.user_path_includes_script_dir else 'no'}")
+        if current.user_path_includes_script_dir:
+            lines.append("Windows user PATH priority is repaired by moving this directory to the front when you run path --add.")
     if current.script_dir_in_path:
-        lines.append("The abet-converter command should be available in a new terminal.")
+        lines.append("The abet-converter command should be available in this terminal.")
+    elif current.user_path_includes_script_dir:
+        lines.append("The script directory is already saved in the Windows user PATH.")
+        lines.append("Close all PowerShell/Terminal windows, open a new one from the Start menu, then try abet-converter --help.")
     else:
         lines.append("To repair PATH, run:")
         lines.append(f"  {current.repair_command}")
@@ -79,12 +91,15 @@ def format_doctor(status: PathStatus | None = None) -> str:
 
 def format_path_show(status: PathStatus | None = None) -> str:
     current = build_path_status() if status is None else status
-    return "\n".join(
-        [
-            f"Script directory: {current.script_dir}",
-            f"Script directory on PATH: {'yes' if current.script_dir_in_path else 'no'}",
-        ]
-    )
+    lines = [
+        f"Script directory: {current.script_dir}",
+        f"Script directory on current terminal PATH: {'yes' if current.script_dir_in_path else 'no'}",
+    ]
+    if current.user_path_includes_script_dir is not None:
+        lines.append(f"Script directory on Windows user PATH: {'yes' if current.user_path_includes_script_dir else 'no'}")
+    if not current.script_dir_in_path and current.user_path_includes_script_dir:
+        lines.append("Open a new PowerShell/Terminal window from the Start menu before trying abet-converter.")
+    return "\n".join(lines)
 
 
 def add_script_dir_to_user_path(script_dir: Path | None = None) -> PathUpdateResult:
@@ -103,15 +118,30 @@ def add_windows_user_path(script_dir: Path, winreg_module: Any | None = None) ->
         except FileNotFoundError:
             current_path = ""
             value_type = getattr(winreg, "REG_EXPAND_SZ", getattr(winreg, "REG_SZ", 1))
-        if path_contains(script_dir, current_path, path_separator=WINDOWS_PATH_SEPARATOR):
-            return PathUpdateResult(False, "Script directory is already present in the user PATH.", "HKCU\\Environment\\Path")
-        next_path = _append_path_entry(current_path, script_dir, WINDOWS_PATH_SEPARATOR)
+        next_path = _prepend_path_entry(current_path, script_dir, WINDOWS_PATH_SEPARATOR)
+        if next_path == current_path:
+            return PathUpdateResult(
+                False,
+                "Script directory is already first in the Windows user PATH. Close all PowerShell/Terminal windows, open a new one from the Start menu, then try abet-converter --help.",
+                "HKCU\\Environment\\Path",
+            )
         winreg.SetValueEx(key, "Path", 0, value_type, next_path)
+    _notify_windows_environment_changed()
     return PathUpdateResult(
         True,
-        "Added script directory to the user PATH. Open a new terminal before running abet-converter.",
+        "Moved script directory to the front of the Windows user PATH. Close all PowerShell/Terminal windows, open a new one from the Start menu, then try abet-converter --help.",
         "HKCU\\Environment\\Path",
     )
+
+
+def get_windows_user_path(winreg_module: Any | None = None) -> str | None:
+    try:
+        winreg = _import_winreg(winreg_module)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ) as key:
+            value, _value_type = winreg.QueryValueEx(key, "Path")
+            return value
+    except (FileNotFoundError, RuntimeError, OSError):
+        return None
 
 
 def add_unix_user_path(script_dir: Path, profile_path: Path | None = None) -> PathUpdateResult:
@@ -161,10 +191,35 @@ def _import_winreg(winreg_module: Any | None) -> Any:
     return winreg
 
 
-def _append_path_entry(path_value: str, directory: Path, separator: str) -> str:
-    if not path_value:
-        return str(directory)
-    return f"{path_value.rstrip(separator)}{separator}{directory}"
+def _prepend_path_entry(path_value: str, directory: Path, separator: str) -> str:
+    directory_text = str(directory)
+    entries = [entry for entry in path_value.split(separator) if entry]
+    normalized_target = _normalize_path_for_compare(directory)
+    kept_entries = [entry for entry in entries if _normalize_path_for_compare(Path(entry)) != normalized_target]
+    next_entries = [directory_text, *kept_entries]
+    return separator.join(next_entries)
+
+
+def _notify_windows_environment_changed() -> None:
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+
+        hwnd_broadcast = 0xFFFF
+        wm_settingchange = 0x001A
+        smto_abortifhung = 0x0002
+        ctypes.windll.user32.SendMessageTimeoutW(
+            hwnd_broadcast,
+            wm_settingchange,
+            0,
+            "Environment",
+            smto_abortifhung,
+            5000,
+            None,
+        )
+    except Exception:
+        return
 
 
 def _normalize_path_for_compare(path: Path) -> str:

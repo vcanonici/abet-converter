@@ -8,7 +8,10 @@ from abet_converter.path_support import (
     PathStatus,
     add_unix_user_path,
     add_windows_user_path,
+    build_path_status,
     format_doctor,
+    format_path_show,
+    get_windows_user_path,
     path_contains,
 )
 
@@ -58,20 +61,56 @@ def test_path_contains_uses_platform_separator(tmp_path: Path) -> None:
 def test_format_doctor_reports_missing_path(tmp_path: Path) -> None:
     status = PathStatus(
         python_executable=Path("C:/Python/python.exe"),
-        package_version="0.3.5",
+        package_version="0.3.6",
         script_dir=tmp_path,
         script_dir_in_path=False,
+        user_path_includes_script_dir=None,
         repair_command="python -m abet_converter path --add",
     )
 
     output = format_doctor(status)
 
-    assert "Version: 0.3.5" in output
-    assert "Script directory on PATH: no" in output
+    assert "Version: 0.3.6" in output
+    assert "Script directory on current terminal PATH: no" in output
     assert "python -m abet_converter path --add" in output
 
 
-def test_windows_path_update_appends_script_dir_once(tmp_path: Path) -> None:
+def test_format_path_show_separates_current_terminal_from_windows_user_path(tmp_path: Path) -> None:
+    status = PathStatus(
+        python_executable=Path("C:/Python/python.exe"),
+        package_version="0.3.6",
+        script_dir=tmp_path,
+        script_dir_in_path=False,
+        user_path_includes_script_dir=True,
+        repair_command="python -m abet_converter path --add",
+    )
+
+    output = format_path_show(status)
+
+    assert "Script directory on current terminal PATH: no" in output
+    assert "Script directory on Windows user PATH: yes" in output
+    assert "Open a new PowerShell/Terminal window" in output
+
+
+def test_build_path_status_reads_windows_user_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake_winreg = FakeWinreg(f"C:\\Other;{tmp_path}")
+    monkeypatch.setattr("abet_converter.path_support.sys.platform", "win32")
+    monkeypatch.setattr("abet_converter.path_support.get_script_dir", lambda: tmp_path)
+    monkeypatch.setenv("PATH", "C:\\Other")
+
+    status = build_path_status(winreg_module=fake_winreg)
+
+    assert status.script_dir_in_path is False
+    assert status.user_path_includes_script_dir is True
+
+
+def test_get_windows_user_path_reads_registry_value() -> None:
+    fake_winreg = FakeWinreg("C:\\Existing")
+
+    assert get_windows_user_path(fake_winreg) == "C:\\Existing"
+
+
+def test_windows_path_update_moves_script_dir_to_front_once(tmp_path: Path) -> None:
     fake_winreg = FakeWinreg("C:\\Existing")
     script_dir = tmp_path / "Python" / "Scripts"
 
@@ -80,8 +119,18 @@ def test_windows_path_update_appends_script_dir_once(tmp_path: Path) -> None:
 
     assert first.changed is True
     assert second.changed is False
-    assert fake_winreg.path_value.endswith(f";{script_dir}")
+    assert fake_winreg.path_value.startswith(f"{script_dir};")
     assert fake_winreg.path_value.count(str(script_dir)) == 1
+
+
+def test_windows_path_update_repairs_priority_and_removes_duplicates(tmp_path: Path) -> None:
+    script_dir = tmp_path / "Python" / "Scripts"
+    fake_winreg = FakeWinreg(f"C:\\Earlier;{script_dir};C:\\Later;{script_dir}")
+
+    result = add_windows_user_path(script_dir, winreg_module=fake_winreg)
+
+    assert result.changed is True
+    assert fake_winreg.path_value == f"{script_dir};C:\\Earlier;C:\\Later"
 
 
 def test_windows_path_update_handles_missing_user_path(tmp_path: Path) -> None:

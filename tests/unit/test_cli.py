@@ -90,7 +90,7 @@ def test_support_command_doctor_prints_installation_status(monkeypatch: pytest.M
 
     output = capsys.readouterr().out
     assert "ABET Converter installation check" in output
-    assert "Script directory on PATH: no" in output
+    assert "Script directory on current terminal PATH: no" in output
     assert "python" in output.lower()
 
 
@@ -102,4 +102,4 @@ def test_support_command_path_show_prints_script_directory(monkeypatch: pytest.M
 
     output = capsys.readouterr().out
     assert f"Script directory: {tmp_path}" in output
-    assert "Script directory on PATH: yes" in output
+    assert "Script directory on current terminal PATH: yes" in output

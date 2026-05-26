@@ -85,13 +85,13 @@ To add the script directory to your user `PATH`, run:
 python -m abet_converter path --add
 ```
 
-Then open a new terminal and check again:
+Then close all PowerShell or Terminal windows, open a new one from the Start menu, and check again:
 
 ```bash
 abet-converter --help
 ```
 
-This explicit repair step is needed because Python wheels installed from PyPI cannot safely edit your system `PATH` during `pip install`.
+This explicit repair step is needed because Python wheels installed from PyPI cannot safely edit your system `PATH` during `pip install`. On Windows, `path --show` reports both the current terminal `PATH` and the saved Windows user `PATH`; the current terminal can still show `no` until you open a new terminal.
 
 ## Convert One File
 
@@ -244,7 +244,7 @@ If you use ABET CONVERTER in research, please cite the repository.
   author = {Canonici, Vinicius Garcia and Pinto, Carlos},
   title = {ABET CONVERTER},
   year = {2026},
-  version = {0.3.5},
+  version = {0.3.6},
   url = {https://github.com/vcanonici/abet-converter},
   note = {Cross-platform CLI to convert ABET and MDB databases into SQLite, SQL, CSV, and XLSX}
 }
